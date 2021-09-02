@@ -1,22 +1,14 @@
 #!/bin/bash
 set -e  # Exit on error
-export PYTHONPATH=/Storage/ASR/chenhangting/Projects/asteroid20210105:/Storage/ASR/chenhangting/Projects/asteroid-filterbanks20210105
+[ ! -d asteroid20210105 ] && git clone --branch v0.4.1 https://github.com/asteroid-team/asteroid.git asteroid20210105
+[ ! -d asteroid-filterbanks20210105 ] && git clone --branch v0.3.1 https://github.com/asteroid-team/asteroid-filterbanks.git asteroid-filterbanks20210105
+export PYTHONPATH=`pwd`/asteroid20210105:`pwd`/asteroid-filterbanks20210105
 # Main storage directory. You'll need disk space to dump the WHAM mixtures and the wsj0 wav
 # files if you start from sphere files.
-storage_dir=
-
-# If you start from the sphere files, specify the path to the directory and start from stage 0
-sphere_dir=  # Directory containing sphere files
-# If you already have wsj0 wav files, specify the path to the directory here and start from stage 1
-wsj0_wav_dir=
-# If you already have the WHAM mixtures, specify the path to the directory here and start from stage 2
-wham_wav_dir=
-# After running the recipe a first time, you can run it from stage 3 directly to train new models.
 
 # Path to the python you'll use for the experiment. Defaults to the current python
 # You can run ./utils/prepare_python_env.sh to create a suitable python environment, paste the output here.
 python_path=/opt/conda/envs/torch16/bin/python
-# python_path=/home/chenhangting/miniconda3/envs/condacuda10/bin/python
 
 # Example usage
 # ./run.sh --stage 3 --tag my_tag --task sep_noisy --id 0,1
