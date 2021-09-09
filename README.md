@@ -1,7 +1,7 @@
 # Beam-Guided-TasNet
 Beam-Guided TasNet: An Iterative Speech Separation Framework with Multi-Channel Output
 
-Please refer to [Pre-print Paper](https://arxiv.org/abs/2102.02998) 
+Please refer to [Preprint Paper](https://arxiv.org/abs/2102.02998) 
 
 ## Contents
 - [Beam-Guided-TasNet](#beam-guided-tasnet)
@@ -61,7 +61,7 @@ Note that the inference results have differences between the quick test and the 
 ## Results
 ([↑up to contents](#contents))
 
-The following results are obtained using `Stage=6`. We use acoustic models train by the script from [SMS-WSJ](https://github.com/fgnt/sms_wsj).
+The following results are obtained using `Stage=6`. We use acoustic models trained by the script from [SMS-WSJ](https://github.com/fgnt/sms_wsj).
 
 ### Noncausal
 | Stage 1 | Iteration # on Stage 2 | w/o last MVDR |     | w/ last MVDR |     |
