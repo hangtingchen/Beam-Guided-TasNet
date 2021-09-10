@@ -77,11 +77,11 @@ The following results are obtained using `Stage=6`. We use acoustic models train
 | Stage 1 | Iteration # on Stage 2 | w/o last MVDR |     | w/ last MVDR |     |
 |---------|------------------------|---------------|-----|--------------|-----|
 |         |                        | SDR           | WER | SDR          | WER |
-| ✔ | 0 |  |  |  |  |
-| ✔ | 1 |  |  |  |  |
-| ✔ | 2 |  |  |  |  |
-| ✔ | 3 |  |  |  |  |
-| ✔ | 4 |  |  |  |  |
+| ✔ | 0 | 8.356 | 37.20 | 10.366 | 24.39 |
+| ✔ | 1 | 12.438 | 21.67 | 11.260 | 22.32 |
+| ✔ | 2 | **12.929** | **20.74** | 11.293 | 22.13 |
+| ✔ | 3 | 12.779 | 21.05 | 11.135 | 22.30 |
+| ✔ | 4 | 12.690 | 21.17 | 10.949 | 22.52 |
 
 ## Acknowledgement
 Thanks for `Asteroid` providing the basic training framework,
