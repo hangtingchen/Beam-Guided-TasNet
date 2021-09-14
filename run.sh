@@ -36,8 +36,8 @@ epochs=200
 
 # Evaluation
 eval_use_gpu=1
-num_task=1
-task_num=0
+job_num=0
+num_job=8
 test_dir=data/${n_src}speakers/wav8k/max/tt
 
 . utils/parse_options.sh
@@ -109,6 +109,7 @@ fi
 if [[ $stage -le 6 ]]; then
     echo "Stage 6 : Strict check"
     CUDA_VISIBLE_DEVICES=$id $python_path -u eval_strictcheck.py \
+                --num_job $num_job --job_num $job_num \
                 --task $task \
                 --test_dir $test_dir \
                 --use_gpu $eval_use_gpu \

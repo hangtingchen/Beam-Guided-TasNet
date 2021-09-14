@@ -32,6 +32,10 @@ parser.add_argument('--n_save_ex', type=int, default=-1,
                     help='Number of audio examples to save, -1 means all')
 parser.add_argument('--stage', type=str,
                     help='Stage')
+parser.add_argument('--job_num', type=int, default=0,
+                    help='job_num')
+parser.add_argument('--num_job', type=int, default=1,
+                    help='num_job')
 
 #compute_metrics = ['si_sdr', 'sdr', 'sir', 'sar', 'stoi']
 compute_metrics = ['si_sdr', ]
@@ -53,58 +57,62 @@ def main(conf):
     loss_func = PITLossWrapper(pairwise_neg_snr, pit_from='pw_mtx')
 
     # Randomly choose the indexes of sentences to save.
-    ex_save_dir = os.path.join(conf['exp_dir'], 'examples_strictcheck{}'.format(conf['stage'].replace(':','')))
+    ex_save_dir = os.path.join(conf['exp_dir'], 'examples_strictcheck{}')
     if conf['n_save_ex'] == -1:
         conf['n_save_ex'] = len(test_set)
     conf['stage'] = [int(s) for s in conf['stage'].split(':')]
+    num_job = conf['num_job']
+    job_num = conf['job_num']
     save_idx = random.sample(range(len(test_set)), conf['n_save_ex'])
     series_list = []
     torch.no_grad().__enter__()
     pbar = tqdm(range(len(test_set)))
     for idx in pbar:
+        if(idx%num_job!=job_num):
+            continue
         # Forward the network on the mixture.
         mix, sources = tensors_to_device(test_set[idx], device=model_device)
-        if(conf['stage'][0]==1 and conf['stage'][1]==1):
-            est_sources, _, _ = model.strictForward(mix[None,], stage='1:1')
-        elif(conf['stage'][0]==1 and conf['stage'][1]==2):
-            _, est_sources, _ = model.strictForward(mix[None,], stage='1:2')
-        elif(conf['stage'][0]>1 and conf['stage'][1]==1):
-            _ , _, est_sources = model.strictForward(mix[None,], stage='{}:2'.format(conf['stage'][0]-1))
-        elif(conf['stage'][0]>1 and conf['stage'][1]==2):
-            _, est_sources, _ = model.strictForward(mix[None,], stage='{}:2'.format(conf['stage'][0]))
-        else:
-            raise ValueError()
+        est_sgs, est_bfs = model.strictForward(mix[None,], do_test='all', stage='5')
         sources = sources[None,:,0,:]
-        est_sources = est_sources[:,:,0,:]
-        loss, reordered_sources = loss_func(est_sources, sources,
-                                            return_est=True)
+        est_sgs = [s[:,:,0,:] for s in est_sgs]
+        est_bfs = [s[:,:,0,:] for s in est_bfs]
+
+        reordered_sgs = [loss_func(s, sources, return_est=True)[-1] for s in est_sgs]
+        reordered_bfs = [loss_func(s, sources, return_est=True)[-1] for s in est_bfs]
+
         mix_np = mix[[0],:].cpu().data.numpy()
         sources_np = sources.squeeze(0).cpu().data.numpy()
-        est_sources_np = reordered_sources.squeeze(0).cpu().data.numpy()
-        utt_metrics = get_metrics(mix_np, sources_np, est_sources_np,
+        est_sgs_np = [s.squeeze(0).cpu().data.numpy() for s in reordered_sgs]
+        est_bfs_np = [s.squeeze(0).cpu().data.numpy() for s in reordered_bfs]
+
+        sgs_metrics = [get_metrics(mix_np, sources_np, est_sgs_np[-1],
                                   sample_rate=conf['sample_rate'],
-                                  metrics_list=compute_metrics)
-        utt_metrics['mix_path'] = test_set.mix[idx][0]
-        series_list.append(pd.Series(utt_metrics))
+                                  metrics_list=compute_metrics) for s in est_sgs_np]
+        bfs_metrics = [get_metrics(mix_np, sources_np, est_bfs_np[-1],
+                                  sample_rate=conf['sample_rate'],
+                                  metrics_list=compute_metrics) for s in est_bfs_np]
+        series_list.append(pd.Series(sgs_metrics[2]))
         pbar.set_description("si_sdr : {} ".format(pd.DataFrame(series_list)['si_sdr'].mean()))
 
         # Save some examples in a folder. Wav files and metrics as text.
         if idx in save_idx:
-            local_save_dir = os.path.join(ex_save_dir, 'ex_{}/'.format(idx))
-            os.makedirs(local_save_dir, exist_ok=True)
-            sf.write(local_save_dir + "mixture.wav", mix_np[0],
-                     conf['sample_rate'])
-            # Loop over the sources and estimates
-            for src_idx, src in enumerate(sources_np):
-                sf.write(local_save_dir + "s{}.wav".format(src_idx+1), src,
+            for i in range(0,5):
+                for j in ('sgs','bfs'):
+                    local_save_dir = os.path.join(ex_save_dir.format(str(i+1)+j), 'ex_{}/'.format(idx))
+                    os.makedirs(local_save_dir, exist_ok=True)
+                    sf.write(local_save_dir + "mixture.wav", mix_np[0],
                          conf['sample_rate'])
-            for src_idx, est_src in enumerate(est_sources_np):
-                est_src *= np.max(np.abs(mix_np))/np.max(np.abs(est_src))
-                sf.write(local_save_dir + "s{}_estimate.wav".format(src_idx+1),
-                         est_src, conf['sample_rate'])
-            # Write local metrics to the example folder.
-            with open(local_save_dir + 'metrics.json', 'w') as f:
-                json.dump(utt_metrics, f, indent=0)
+                    # Loop over the sources and estimates
+                    for src_idx, src in enumerate(sources_np):
+                        sf.write(local_save_dir + "s{}.wav".format(src_idx+1), src,
+                            conf['sample_rate'])
+                    for src_idx, est_src in enumerate(eval("est_{}_np".format(j))[i]):
+                        # est_src *= np.max(np.abs(mix_np))/np.max(np.abs(est_src))
+                        sf.write(local_save_dir + "s{}_estimate.wav".format(src_idx+1),
+                            est_src, conf['sample_rate'])
+                    # Write local metrics to the example folder.
+                    with open(local_save_dir + 'metrics.json', 'w') as f:
+                        json.dump(eval("{}_metrics".format(j))[i], f, indent=0)
 
     # Save all metrics to the experiment folder.
     all_metrics_df = pd.DataFrame(series_list)
