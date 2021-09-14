@@ -2,6 +2,7 @@
 set -e  # Exit on error
 [ ! -d asteroid20210105 ] && git clone --branch v0.4.1 https://github.com/asteroid-team/asteroid.git asteroid20210105
 [ ! -d asteroid-filterbanks20210105 ] && git clone --branch v0.3.1 https://github.com/asteroid-team/asteroid-filterbanks.git asteroid-filterbanks20210105
+cp __init_filterbanks__.py asteroid-filterbanks20210105/asteroid_filterbanks/__init__.py
 export PYTHONPATH=`pwd`/asteroid20210105:`pwd`/asteroid-filterbanks20210105
 # Main storage directory. You'll need disk space to dump the WHAM mixtures and the wsj0 wav
 # files if you start from sphere files.
