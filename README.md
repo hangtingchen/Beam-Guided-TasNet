@@ -111,6 +111,15 @@ Thank for `ESPnet` with the MVDR code,
   organization={IEEE},
 }
 ```
+Thanks for `SMS-WSJ` for the ASR training script,
+```BibTex
+@Article{SmsWsj19,
+  author    = {Drude, Lukas and Heitkaemper, Jens and Boeddeker, Christoph and Haeb-Umbach, Reinhold},
+  title     = {{SMS-WSJ}: Database, performance measures, and baseline recipe for multi-channel source separation and recognition},
+  journal   = {arXiv preprint arXiv:1910.13934},
+  year      = {2019},
+}
+```
 
 ## Citing us
 ([↑up to contents](#contents))
