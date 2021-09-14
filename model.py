@@ -69,10 +69,6 @@ class Model(nn.Module):
         print("Using stft ", self.stft_dict)
 
     def forward(self, x, s, do_test=False, stage='1:2'):
-        '''
-            Compared with forward, atomForwardNonCausal removes shuffle setup
-            Compared with forward, atomForwardCausal perform frame-by-frame inference strictly
-        '''
         assert int(stage.split(':')[0])>0
         assert int(stage.split(':')[-1])>0
         n_batch, n_src, n_chan, n_samp = s.shape
@@ -119,11 +115,14 @@ class Model(nn.Module):
         # return est_s, est_bf, est_s, s
         return est_s, est_bf, est_s2, s
 
-    def getIdxSet(self, n_src, device):
+    def getIdxSet(self, n_src, device, reverse=False):
         a1=[a0 for a0 in range(n_src)]
         a1.extend([a0 for a0 in range(n_src)])
         a1=torch.tensor(a1).to(device)
-        return [a1[a0:a0+n_src] for a0 in range(n_src)]
+        if(reverse):
+            return [a1[-n_src-a0:][0:n_src] for a0 in range(n_src)]
+        else:
+            return [a1[a0:a0+n_src] for a0 in range(n_src)]
 
     def permute_sig(self, est_sources, causal=False):
         # b s c t
@@ -145,16 +144,9 @@ class Model(nn.Module):
                 reest_sources.append(self.permute(est_sources[:,:,chan,:], est_sources[:,:,0,:], return_est=True)[1])
         return torch.stack(reest_sources,2)
 
-    def strictForward(self, x, do_test=False, stage='1:2'):
-        def genFlipPadX(xs,lent):
-            lencount = 0
-            xslist = []
-            while(lencount<lent):
-                xs = torch.flip(xs,[-1,])
-                xslist.append(xs)
-                lencount += xs.shape[-1]
-            return torch.cat(xslist,-1)[...,0:lent]
-        bufflen = 1024 * 8
+    def strictForward(self, x, do_test=True, stage='1:2'):
+        n_chan = x.shape[1]
+        bufflen = self.stft_dict['kernel_size'] * 2
         num_padframes=self.stft_dict['kernel_size']//self.stft_dict['stride']-1
         if(self.stft_dict['kernel_size']-self.stft_dict['stride']>0):
             padx = torch.zeros(x.shape[0], x.shape[1], 2*(self.stft_dict['kernel_size']-self.stft_dict['stride']), device=x.device)
@@ -168,30 +160,36 @@ class Model(nn.Module):
                 # frame-by-frame input with additional buffer
                 # each frame infer starti -> starti+self.stft_dict['stride'], but will use bufflen for input, and use pasthist for mvdr cal
                 # padx = genFlipPadX(x[:,:,0:starti+self.stft_dict['stride']], 2*(self.stft_dict['kernel_size']-self.stft_dict['stride']))
-                if(starti < bufflen):
+                if(starti <= bufflen):
                     inputx = torch.cat([x[:,:,0:starti+self.stft_dict['stride']],padx],-1)
-                    histcur = self.atomForwardNonCausal(inputx, num_padframes, do_test, stage)
+                    cursg, curbf = self.atomForward(inputx, num_padframes, do_test, stage)
                 else:
                     inputx = torch.cat([x[:,:,starti-bufflen:starti+self.stft_dict['stride']], padx],-1)
-                    pasthist = [x[...,0:starti-bufflen],*[h[...,0:starti-bufflen] for h in hist]]
-                    histcur = self.atomForwardNonCausal(inputx, num_padframes, do_test, stage, pasthist=pasthist)
+                    pastsghist = [x[...,0:starti],*[h[...,0:starti] for h in hist[0:len(hist)//2]]]
+                    cursg, curbf = self.atomForward(inputx, num_padframes, do_test, stage, pastsghist=pastsghist, bufflen=bufflen)
+                curhist = [*cursg, *curbf]
                 if(starti==0):
-                    hist = histcur
+                    hist = curhist
                 else:
                     # sf.write('t1mp{}.wav'.format(starti),hist[1].detach().cpu().numpy()[0,0,0,:],8000)
                     # sf.write('t2mp{}.wav'.format(starti),histcur[1].detach().cpu().numpy()[0,0,0,:],8000)
-                    if(starti < bufflen):
-                        hist = [torch.cat([h[0],h[1][...,h[0].shape[-1]:]],-1) for h in zip(hist, histcur)]
+                    if(starti <= bufflen):
+                        hist = [torch.cat([h[0],h[1][...,h[0].shape[-1]:]],-1) for h in zip(hist, curhist)]
                     else:
-                        hist = [torch.cat([h[0],h[1][...,bufflen:]],-1) for h in zip(hist, histcur)]
+                        hist = [torch.cat([h[0],h[1]],-1) for h in zip(hist, curhist)]
                 hist = [h[...,:min(starti+self.stft_dict['stride'],x.shape[-1])] for h in hist]
+                # frame by frame permute
+                outhist = hist
         else:
-            hist = self.atomForwardNonCausal(torch.cat([padx, x, padx],-1), num_padframes, do_test, stage)
-            hist = [h[...,padx.shape[-1]:-padx.shape[-1]] for h in hist]
-        est_s, est_bf, est_s2 = hist
-        return est_s, est_bf, est_s2
+            cursg, curbf = self.atomForward(torch.cat([padx, x, padx],-1), num_padframes, do_test, stage)
+            curhist = [*cursg, *curbf]
+            hist = [h[...,padx.shape[-1]:-padx.shape[-1]] for h in curhist]
+            outhist = [h.mean(0,keepdim=True) for h in hist]
+        est_sgs = outhist[:len(outhist)//2]
+        est_bfs = outhist[len(outhist)//2:]
+        return est_sgs, est_bfs
 
-    def atomForwardNonCausal(self, x, num_padframes, do_test=False, stage='1:2', pasthist=None):
+    def atomForward(self, x, num_padframes, do_test=False, stage='1:2', pastsghist=None, bufflen=None):
         assert int(stage.split(':')[0])>0
         assert int(stage.split(':')[-1])>0
         n_batch, n_chan, n_samp = x.shape
@@ -202,82 +200,47 @@ class Model(nn.Module):
             tf_x.unsqueeze(1).unsqueeze(1)).reshape( \
             n_batch*n_src, n_chan, *tf_x.shape[-2:])), \
             x).view(n_batch, n_src, n_chan, -1) # b s c t
-
-        # est_s = self.permute_sig(est_s, causal=self.causal)
-        if(stage.split(':')[-1]=='1'):
-            assert int(stage.split(":")[0]=='1')
-            return est_s, est_s, est_s
-        for it in range(0,int(stage.split(':')[0])):
+    
+        nowestsg = [est_s[...,bufflen:],]
+        nowestbf = list()
+        for it in range(0,int(stage[0])+1):
+            # Here we use est_s[...,bufflen:] to ensure that
+            # 1. Only the current frame is actually inferred, and the past information is not modified.
+            # 2. The true causal code should only infer things after `bufflen`, that is, the calculation of
+            # est_s[...,0:bufflen] is unnecessary, which will reduce the computation cost time if deployed.
+            # Besides, we generate the entire est_bf with causal=True. This trick, called "noncausal MVDR 
+            # for causal inference", yields the improved signal quality.
+            # We also set causal=False for fast inference
             if(it==0):
-                est_bf = self.mvdr(torch.cat([pasthist[0],x],-1) \
-                            if isinstance(pasthist,list) else x, \
+                est_bf = self.mvdr(torch.cat([pastsghist[0],x[...,bufflen:]],-1) \
+                            if isinstance(pastsghist,list) else x, \
                             self.permute_sig( \
-                            torch.cat([pasthist[1], est_s.detach()],-1) \
-                            if isinstance(pasthist,list) else est_s.detach(), \
-                            causal=self.causal), \
-                            causal=self.causal,
+                            torch.cat([pastsghist[it+1], est_s.detach()[...,bufflen:]],-1) \
+                            if isinstance(pastsghist,list) else est_s.detach(), \
+                            causal=False), \
+                            causal=False,
                             num_padframes=num_padframes)[0].detach() # b s c t
             else:
-                est_bf = self.mvdr(torch.cat([pasthist[0],x],-1) \
-                            if isinstance(pasthist,list) else x, \
+                est_bf = self.mvdr(torch.cat([pastsghist[0],x[...,bufflen:]],-1) \
+                            if isinstance(pastsghist,list) else x, \
                             self.permute_sig( \
-                            torch.cat([pasthist[-1], est_s2.detach()], -1) \
-                            if isinstance(pasthist,list) else est_s2.detach(), \
-                            causal=self.causal), \
-                            causal=self.causal,
+                            torch.cat([pastsghist[it+1], est_s2.detach()[...,bufflen:]], -1) \
+                            if isinstance(pastsghist,list) else est_s2.detach(), \
+                            causal=False), \
+                            causal=False,
                             num_padframes=num_padframes)[0].detach() # b s c t
-            if(isinstance(pasthist,list)):est_bf = est_bf[...,pasthist[0].shape[-1]:]
+            if(isinstance(pastsghist,list)):est_bf = est_bf[...,pastsghist[0].shape[-1]-bufflen:]
+            nowestbf.append(est_bf[...,bufflen:])
+            if(it==int(stage[0])):break
             est_bf = est_bf.view(n_batch, n_src*n_chan, n_samp) # b s c t
             est_bf_x  = self.enc2(torch.cat([x, est_bf],1)) # b s*c f t
+            est_bf = est_bf.view(n_batch, n_src, n_chan, n_samp)
 
             m_bf = self.masker2(est_bf_x).view(n_batch, n_src, n_chan, *est_bf_x.shape[-2:]) # b s c f t
             est_s2 = torch_utils.pad_x_to_y(self.dec2((m_bf * est_bf_x.unsqueeze(1).unsqueeze(1)).reshape(n_batch*n_src, n_chan, *est_bf_x.shape[-2:])), x).view(n_batch, n_src, n_chan, -1) # b s c t
+            nowestsg.append(est_s2[...,bufflen:])
 
-            est_bf = est_bf.view(n_batch, n_src, n_chan, n_samp)
-
-        return est_s, est_bf, est_s2
-
-    def atomForwardCausal(self, x, hist, do_test=False, stage='1:2'):
-        assert int(stage.split(':')[0])>0
-        assert int(stage.split(':')[-1])>0
-        n_batch, n_src, n_chan, n_samp = x.shape
-        n_src = self.net_conf['n_src']
-        tf_x = self.enc(x) # b f t
-        m = self.masker1(tf_x).view(n_batch, n_src, n_chan, *tf_x.shape[-2:]) # b s c f t
-        est_s = torch_utils.pad_x_to_y(self.dec((m * \
-            tf_x.unsqueeze(1).unsqueeze(1)).reshape( \
-            n_batch*n_src, n_chan, *tf_x.shape[-2:])), \
-            s).view(n_batch, n_src, n_chan, -1) # b s c t
-
-        # est_s = self.permute_sig(est_s, causal=self.causal)
-        if(stage.split(':')[-1]=='1'):
-            assert int(stage.split(":")[0]=='1')
-            return est_s, est_s, est_s
-        for it in range(0,int(stage.split(':')[0])):
-            # we use all history to perform permutation and mvdr, and take the last buffer
-            if(it==0):
-                est_bf = self.mvdr(x, self.permute_sig( \
-                            torch.cat([hist[0], est_s.detach()],-1) \
-                            if len(hist)==3 else est_s.detach(), \
-                            causal=False), \
-                            causal=False)[0].detach() # b s c t
-            else:
-                est_bf = self.mvdr(x, self.permute_sig( \
-                            torch.cat([hist[-1], est_s2.detach()], -1) \
-                            if len(hist)==3 else est_s2.detach(), \
-                            causal=False), \
-                            causal=False)[0].detach() # b s c t
-            est_bf = est_bf[:,:,:,hist[0].shape[-1]:]
-
-            est_bf = est_bf.view(n_batch, n_src*n_chan, n_samp) # b s c t
-            est_bf_x = self.enc2(torch.cat([x, est_bf],1)) # b s*c f t
-
-            m_bf = self.masker2(est_bf_x).view(n_batch, n_src, n_chan, *est_bf_x.shape[-2:]) # b s c f t
-            est_s2 = torch_utils.pad_x_to_y(self.dec2((m_bf * est_bf_x.unsqueeze(1).unsqueeze(1)).reshape(n_batch*n_src, n_chan, *est_bf_x.shape[-2:])), s).view(n_batch, n_src, n_chan, -1) # b s c t
-
-            est_bf = est_bf.view(n_batch, n_src, n_chan, n_samp)
-
-        return est_s, est_bf, est_s2
+        return nowestsg, nowestbf
 
 def load_best_model(train_conf, exp_dir):
     """ Load best model after training.
@@ -335,7 +298,11 @@ def load_avg_model(train_conf, exp_dir):
         for k in checkpoint.keys():
             checkpoint[k] += tmp_ckpt[k]
         print('avg model : {}'.format(best_model_path[i]))
-    for k in checkpoint.keys():
+    for k in list(checkpoint.keys()):
+        '''
+        if('stft_model' in k):del checkpoint[k]
+        else:checkpoint[k] /= float(len(best_model_path))
+        '''
         checkpoint[k] /= float(len(best_model_path))
     # Load state_dict into model.
     model = torch_utils.load_state_dict_in(checkpoint, model)
