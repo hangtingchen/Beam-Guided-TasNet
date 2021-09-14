@@ -56,12 +56,16 @@ You can give a strict check by running :
 ```bash
 ./run.sh --tag $tag --id $id --test_stage $test_stage --stage 6
 ```
-Note that the inference results have differences between the quick test and the strict check under the causal condition due to different paddings. Besides, the strict check is slow due to large redundant computations in each frame.
+Note that the inference results have differences between the quick test and the strict check under the causal condition due to different paddings.
 
 ## Results
 ([↑up to contents](#contents))
 
-The following results are obtained using `Stage=6`. We use acoustic models trained by the script from [SMS-WSJ](https://github.com/fgnt/sms_wsj).
+The following results are obtained using strict check `Stage=6`. We use acoustic models trained by the script from [SMS-WSJ](https://github.com/fgnt/sms_wsj). The decode script can be called like
+```bash
+./asr_decodespwsj2/run_decode.sh $ROOT/ConvTasNet_parcoder2_snr_serial3/exp/train_convtasnet_reverb2reverb_8kmin_823e6963noncausal/examples_strictcheck1bfs
+```
+We recommend you put `asr_decodespwsj2` into SMS-WSJ directory.
 
 ### Noncausal
 | Stage 1 | Iteration # on Stage 2 | w/o last MVDR |     | w/ last MVDR |     |
