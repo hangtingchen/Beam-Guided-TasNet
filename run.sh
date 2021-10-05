@@ -73,7 +73,7 @@ if $causal;then
 else
   conf_file="${conf_file}_noncausal.yml"
 fi
-cp ${conf_file} ./local/conf.yml
+cp ./local/${conf_file} ./local/conf.yml
 
 if [[ $stage -le 3 ]]; then
   echo "Stage 3: Training"
