@@ -242,6 +242,137 @@ class Model(nn.Module):
 
         return nowestsg, nowestbf
 
+    def strictOracleForward(self, x, s, do_test=True, stage='1:2'):
+        n_chan = x.shape[1]
+        if(do_test=='all'):
+            inx_slc = self.getIdxSet(n_chan,x.device)
+            x = torch.cat([torch.index_select(x,1,inx) for inx in inx_slc],0)
+            s = torch.cat([torch.index_select(s,2,inx) for inx in inx_slc],0)
+            n_batch = len(inx_slc)
+        bufflen = self.stft_dict['kernel_size'] * 2
+        num_padframes=self.stft_dict['kernel_size']//self.stft_dict['stride']-1
+        if(self.stft_dict['kernel_size']-self.stft_dict['stride']>0):
+            padx = torch.zeros(x.shape[0], x.shape[1], 2*(self.stft_dict['kernel_size']-self.stft_dict['stride']), device=x.device)
+            pads = torch.zeros(x.shape[0], s.shape[1], x.shape[1], 2*(self.stft_dict['kernel_size']-self.stft_dict['stride']), device=x.device)
+        elif(self.stft_dict['kernel_size']-self.stft_dict['stride']==0):
+            padx = torch.zeros(x.shape[0], x.shape[1], self.stft_dict['kernel_size'], device=x.device)
+            pads = torch.zeros(x.shape[0], s.shape[1], x.shape[1], self.stft_dict['kernel_size'], device=x.device)
+        else:
+            raise ValueError()
+        if(self.net_conf['causal']):
+            # b c t
+            for starti in range(0, x.shape[-1], self.stft_dict['stride']):
+                # frame-by-frame input with additional buffer
+                # each frame infer starti -> starti+self.stft_dict['stride'], but will use bufflen for input, and use pasthist for mvdr cal
+                # padx = genFlipPadX(x[:,:,0:starti+self.stft_dict['stride']], 2*(self.stft_dict['kernel_size']-self.stft_dict['stride']))
+                if(starti <= bufflen):
+                    inputx = torch.cat([x[:,:,0:starti+self.stft_dict['stride']],padx],-1)
+                    inputs = torch.cat([s[:,:,:,0:starti+self.stft_dict['stride']],pads],-1)
+                    cursg, curbf = self.atomOracleForward(inputx, inputs, num_padframes, do_test, stage)
+                else:
+                    inputx = torch.cat([x[:,:,starti-bufflen:starti+self.stft_dict['stride']], padx],-1)
+                    inputs = torch.cat([s[:,:,:,starti-bufflen:starti+self.stft_dict['stride']], pads],-1)
+                    pastsghist = [x[...,0:starti],*[h[...,0:starti] for h in hist[0:len(hist)//2]]]
+                    cursg, curbf = self.atomOracleForward(inputx, inputs, num_padframes, do_test, stage, pastsghist=pastsghist, bufflen=bufflen)
+                curhist = [*cursg, *curbf]
+                if(starti==0):
+                    hist = curhist
+                else:
+                    # sf.write('t1mp{}.wav'.format(starti),hist[1].detach().cpu().numpy()[0,0,0,:],8000)
+                    # sf.write('t2mp{}.wav'.format(starti),histcur[1].detach().cpu().numpy()[0,0,0,:],8000)
+                    if(starti <= bufflen):
+                        hist = [torch.cat([h[0],h[1][...,h[0].shape[-1]:]],-1) for h in zip(hist, curhist)]
+                    else:
+                        hist = [torch.cat([h[0],h[1]],-1) for h in zip(hist, curhist)]
+                hist = [h[...,:min(starti+self.stft_dict['stride'],x.shape[-1])] for h in hist]
+                # frame by frame permute
+                if(do_test=='all'):
+                    tmphist = hist.copy()
+                    inx_slc = self.getIdxSet(n_chan, x.device, reverse=True)
+                    n_samp = hist[-1].shape[-1]
+                    for tmphisti in range(len(tmphist)):
+                        tmphist[tmphisti] = torch.cat([torch.index_select(tmphist[tmphisti][[inx0]],2,inx) for inx0,inx in enumerate(inx_slc)],0)#b s c t
+                        tmphist[tmphisti] = tmphist[tmphisti].permute(1,0,2,3).reshape(1, self.n_src, n_batch*n_chan, n_samp)
+                        # causal=False for causal inference, which saves a lot of time
+                        tmphist[tmphisti] = self.permute_sig(tmphist[tmphisti], causal=False)
+                        tmphist[tmphisti] = tmphist[tmphisti].view(self.n_src, n_batch, n_chan, n_samp).permute(1,0,2,3).contiguous()
+                        tmphist[tmphisti] = tmphist[tmphisti].mean(0,keepdim=True)
+                    if(starti==0):
+                        outhist = tmphist
+                    else:
+                        outhist = [torch.cat([h[0],h[1][...,h[0].shape[-1]:]],-1) for h in zip(outhist, tmphist)]
+                else:
+                     outhist = hist
+            '''
+            # Final permute, this achieves nearly same results
+            if(do_test=='all'):
+                inx_slc = self.getIdxSet(n_chan, x.device, reverse=True)
+                n_samp = hist[-1].shape[-1]
+                for histi in range(len(hist)):
+                    hist[histi] = torch.cat([torch.index_select(hist[histi][[inx0]],2,inx) for inx0,inx in enumerate(inx_slc)],0) # b s c t
+                    hist[histi] = hist[histi].permute(1,0,2,3).reshape(1, self.n_src, n_batch*n_chan, n_samp)
+                    hist[histi] = self.permute_sig(hist[histi], causal=self.causal)
+                    hist[histi] = hist[histi].view(self.n_src, n_batch, n_chan, n_samp).permute(1,0,2,3).contiguous()
+                outhist = [h.mean(0,keepdim=True) for h in hist]
+            '''
+        else:
+            cursg, curbf = self.atomOracleForward(torch.cat([padx, x, padx],-1), torch.cat([pads, s, pads],-1), num_padframes, do_test, stage)
+            curhist = [*cursg, *curbf]
+            hist = [h[...,padx.shape[-1]:-padx.shape[-1]] for h in curhist]
+            if(do_test=='all'):
+                inx_slc = self.getIdxSet(n_chan, x.device, reverse=True)
+                n_samp = hist[-1].shape[-1]
+                for histi in range(len(hist)):
+                    hist[histi] = torch.cat([torch.index_select(hist[histi][[inx0]],2,inx) for inx0,inx in enumerate(inx_slc)],0) # b s c t
+                    hist[histi] = hist[histi].permute(1,0,2,3).reshape(1, self.n_src, n_batch*n_chan, n_samp)
+                    hist[histi] = self.permute_sig(hist[histi], causal=self.causal)
+                    hist[histi] = hist[histi].view(self.n_src, n_batch, n_chan, n_samp).permute(1,0,2,3).contiguous()
+            outhist = [h.mean(0,keepdim=True) for h in hist]
+        est_sgs = outhist[:len(outhist)//2]
+        est_bfs = outhist[len(outhist)//2:]
+        return est_sgs, est_bfs
+
+    def atomOracleForward(self, x, s, num_padframes, do_test=False, stage='1:2', pastsghist=None, bufflen=None):
+        assert int(stage.split(':')[0])>0
+        assert int(stage.split(':')[-1])>0
+        n_batch, n_chan, n_samp = x.shape
+        n_src = self.net_conf['n_src']
+        est_s = s # b s c t
+    
+        nowestsg = [est_s[...,bufflen:],]
+        nowestbf = list()
+        for it in range(0,int(stage[0])+1):
+            # Here we use est_s[...,bufflen:] to ensure that
+            # 1. Only the current frame is actually inferred, and the past information is not modified.
+            # 2. The true causal code should only infer things after `bufflen`, that is, the calculation of
+            # est_s[...,0:bufflen] is unnecessary, which will reduce the computation cost time if deployed.
+            # Besides, we generate the entire est_bf with causal=True. This trick, called "noncausal MVDR 
+            # for causal inference", yields the improved signal quality.
+            # We also set causal=False for fast inference
+            if(it==0):
+                est_bf = self.mvdr(torch.cat([pastsghist[0],x[...,bufflen:]],-1) \
+                            if isinstance(pastsghist,list) else x, \
+                            torch.cat([pastsghist[it+1], est_s.detach()[...,bufflen:]],-1) \
+                            if isinstance(pastsghist,list) else est_s.detach(), \
+                            causal=False,
+                            num_padframes=num_padframes)[0].detach() # b s c t
+            else:
+                est_bf = self.mvdr(torch.cat([pastsghist[0],x[...,bufflen:]],-1) \
+                            if isinstance(pastsghist,list) else x, \
+                            torch.cat([pastsghist[it+1], est_s2.detach()[...,bufflen:]], -1) \
+                            if isinstance(pastsghist,list) else est_s2.detach(), \
+                            causal=False,
+                            num_padframes=num_padframes)[0].detach() # b s c t
+            if(isinstance(pastsghist,list)):est_bf = est_bf[...,pastsghist[0].shape[-1]-bufflen:]
+            nowestbf.append(est_bf[...,bufflen:])
+            if(it==int(stage[0])):break
+            est_bf = est_bf.view(n_batch, n_src, n_chan, n_samp) # b s c t
+
+            est_s2 = est_bf # b s c t
+            nowestsg.append(est_s2[...,bufflen:])
+
+        return nowestsg, nowestbf
+
 def load_best_model(train_conf, exp_dir):
     """ Load best model after training.
 

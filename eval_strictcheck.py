@@ -72,7 +72,7 @@ def main(conf):
             continue
         # Forward the network on the mixture.
         mix, sources = tensors_to_device(test_set[idx], device=model_device)
-        est_sgs, est_bfs = model.strictForward(mix[None,], do_test='all', stage='5')
+        est_sgs, est_bfs = model.strictForward(mix[None,], do_test=True, stage='5')
         sources = sources[None,:,0,:]
         est_sgs = [s[:,:,0,:] for s in est_sgs]
         est_bfs = [s[:,:,0,:] for s in est_bfs]
