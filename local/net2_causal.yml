@@ -1,0 +1,41 @@
+# Filterbank config
+filterbank:
+  n_channels: 4
+  n_filters: 256
+  kernel_size: 16
+  stride: 8
+# Network config
+masknet:
+  audio_chan: 4
+  in_chan: 256
+  n_blocks: 8
+  n_repeats: 3
+  mask_act: relu
+  bn_chan: 128
+  skip_chan: 128
+  hid_chan: 256
+  conv_kernel_size: 3
+  norm_type: cLN
+  causal: yes
+# Training config
+training:
+  epochs: 200
+  batch_size: 10
+  num_workers: 4
+  half_lr: yes
+  early_stop: no
+# Optim config
+optim:
+  optimizer: adam
+  lr: 0.001
+  weight_decay: 0.
+# Data config
+data:
+  train_dir: data/wav8k/min/tr/
+  valid_dir: data/wav8k/min/cv/
+  task: sep_clean
+  n_src: 2
+  sample_rate: 8000
+  mode: min
+  bf_dir:
+

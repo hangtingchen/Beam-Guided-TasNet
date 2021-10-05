@@ -28,11 +28,12 @@ mode=min
 n_src=2
 
 # Training
-batch_size=10
+net_num=2 # netnumber=1 means beamtasnet, netnumber=2 means proposed beam-guided tasnet
+causal=false
+batch_size=12
 num_workers=8
-#optimizer=adam
 lr=0.001
-epochs=200
+epochs=150
 
 # Evaluation
 eval_use_gpu=1
@@ -59,6 +60,21 @@ expdir=exp/train_convtasnet_${tag}
 mkdir -p $expdir && echo $uuid >> $expdir/run_uuid.txt
 echo "Results from the following experiment will be stored in $expdir"
 
+if [[ ${net_num} -eq 1 ]];then
+  pretrain_epochs=$epochs
+elif [[ ${net_num} -eq 2 ]];then
+  pretrain_epochs=`expr $epochs / 2`
+else
+  echo "net_num=1 means beam-tasnet, net_num=2 means beam-guided tasnet. Unexpected net_num=${net_num}" && exit 1;
+fi
+conf_file=net${net_num}
+if $causal;then
+  conf_file="${conf_file}_causal.yml"
+else
+  conf_file="${conf_file}_noncausal.yml"
+fi
+cp ${conf_file} ./local/conf.yml
+
 if [[ $stage -le 3 ]]; then
   echo "Stage 3: Training"
   mkdir -p logs
@@ -69,7 +85,7 @@ if [[ $stage -le 3 ]]; then
                 --task $task \
                 --sample_rate $sample_rate \
                 --lr $lr \
-                --epochs $epochs \
+                --epochs ${pretrain_epochs} \
                 --batch_size $batch_size \
                 --num_workers $num_workers \
                 --exp_dir ${expdir}/ | tee logs/train_${tag}.log

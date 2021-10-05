@@ -13,6 +13,7 @@ Please refer to [Preprint Paper](https://arxiv.org/abs/2102.02998)
   - [Results](#results)
     - [Noncausal](#noncausal)
     - [Causal](#causal)
+    - [Oracle test](#oracle-test)
   - [Acknowledgement](#acknowledgement)
   - [Citing us](#citing-us)
 
@@ -71,6 +72,7 @@ We recommend you put `asr_decodespwsj2` into SMS-WSJ directory.
 | Stage 1 | Iteration # on Stage 2 | w/o last MVDR |     | w/ last MVDR |     |
 |---------|------------------------|---------------|-----|--------------|-----|
 |         |                        | SDR           | WER | SDR          | WER |
+| Beam-TasNet |  | 12.652 | 22.11 | 17.387 | 13.38 |
 | ✔ | 0 | 11.823 | 25.08 | 16.768 | 13.83 |
 | ✔ | 1 | 18.738 | 13.50 | 19.181 | 12.39 |
 | ✔ | 2 | 19.727 | 13.08 | 19.735 | **12.23** |
@@ -78,14 +80,27 @@ We recommend you put `asr_decodespwsj2` into SMS-WSJ directory.
 | ✔ | 4 | 19.442 | 13.19 | 19.203 | 12.61 |
 
 ### Causal
+
 | Stage 1 | Iteration # on Stage 2 | w/o last MVDR |     | w/ last MVDR |     |
 |---------|------------------------|---------------|-----|--------------|-----|
 |         |                        | SDR           | WER | SDR          | WER |
-| ✔ | 0 | 8.356 | 37.20 | 10.558 | 23.79 |
-| ✔ | 1 | 12.401 | 21.83 | 11.612 | 21.67 |
-| ✔ | 2 | **13.016** | **20.61** | 11.710 | 21.32 |
-| ✔ | 3 | 12.961 | 20.80 | 11.607 | 21.67 |
-| ✔ | 4 | 12.932 | 21.02 | 11.456 | 21.85 |
+| Beam-TasNet |  | 9.030 | 33.55 | 11.358 | 21.41 |
+| ✔ | 0 | 8.521  | 35.83 | 10.740 | 23.00 |
+| ✔ | 1 | 12.723 | 20.76 | 11.879 | 20.64 |
+| ✔ | 2 | 13.404 | **19.61** | 12.029 | 20.43 |
+| ✔ | 3 | **13.503** | 19.72 | 11.974 | 20.67 |
+| ✔ | 4 | 13.436 | 19.93 | 11.857 | 20.91 |
+
+### Oracle test
+| Oracle method | Causal | w/o last MVDR |     | w/ last MVDR |     |
+|---------------|--------|---------------|-----|--------------|-----|
+|               |        | SDR           | WER | SDR          | WER |
+| Signal | × | ∞ | 11.67 | 23.481 | 11.89 |
+| Mask   | x | 11.004 | 28.09 | 14.458 | 15.75 |
+| Mask-avg   | x | 11.004 | 28.09 | 14.711 | 15.01 |
+| Signal | ✔ | ∞ | 11.67 | 17.977 | 13.18 |
+| Mask   | ✔ | 11.004 | 28.09 | 10.557 | 20.85 |
+| Mask-avg | ✔ | 11.004 | 28.09 | 8.637 | 23.24 |
 
 ## Acknowledgement
 Thanks for `Asteroid` providing the basic training framework,
