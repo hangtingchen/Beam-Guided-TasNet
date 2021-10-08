@@ -22,9 +22,9 @@ noncausal_stft_dict={
 }
 
 causal_stft_dict={
-    'n_filters': 256,
-    'kernel_size': 256,
-    'stride':256,
+    'n_filters': 4096,
+    'kernel_size': 4096,
+    'stride':1024,
 }
 
 class STFT(nn.Module):
