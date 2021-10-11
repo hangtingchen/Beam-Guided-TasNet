@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import random
 
 from asteroid.engine.system import System
 from asteroid.losses import pairwise_neg_snr, PITLossWrapper
@@ -16,7 +17,11 @@ class BeamTasNetSystem(System):
 
     def common_step(self, batch, batch_nb, train=False):
         inputs, targets = self.unpack_data(batch)
-        est_sig1, est_bf, est_sig2, sig = self(inputs, targets, do_test=not train)
+        if(self.pretrain):
+            est_sig1, est_bf, est_sig2, sig = self(inputs, targets, do_test=not train)
+        else:
+            stage = random.choice(['1:2','2:2'])
+            est_sig1, est_bf, est_sig2, sig = self(inputs, targets, do_test=not train, stage=stage)
         if(self.pretrain):
             loss, loss_dic = self.loss_func(est_sig1, sig)
         else:
