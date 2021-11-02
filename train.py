@@ -8,6 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning import seed_everything
 
 from asteroid.data.spatial_wsj0_mix import make_dataloaders
 from asteroid.losses import PITLossWrapper, pairwise_neg_snr
@@ -21,6 +22,7 @@ from system import BeamTasNetSystem, BFLoss
 
 # By default train.py will use all available GPUs. The `id` option in run.sh
 # will limit the number of available GPUs for train.py .
+seed_everything(seed=0)
 parser = argparse.ArgumentParser()
 parser.add_argument('--exp_dir', default='exp/tmp',
                     help='Full path to save best validation model')
@@ -33,6 +35,17 @@ def main(conf):
 
     # Define model and optimizer
     model, optimizer = make_model_and_optimizer(conf)
+    exp_dir = conf['main_args']['exp_dir']
+    if(os.path.exists(os.path.join(exp_dir, 'precheckpoints/'))):
+        all_ckpt = os.listdir(os.path.join(exp_dir, 'precheckpoints/'))
+        all_ckpt=[(ckpt,int("".join(filter(str.isdigit,ckpt)))) for ckpt in all_ckpt]
+        all_ckpt.sort(key=lambda x:x[1])
+        best_model_path = os.path.join(exp_dir, 'precheckpoints', all_ckpt[-1][0])
+        orig=torch.load(best_model_path,map_location='cpu')['state_dict']
+        model_statedict = model.state_dict()
+        for k in orig.keys():
+            model_statedict[k[6:]]=orig[k]
+        model.load_state_dict(model_statedict,strict=True)
 
     train_loader, val_loader = make_dataloaders(**conf['data'],
                                                 **conf['training'],
@@ -44,7 +57,6 @@ def main(conf):
         scheduler = ReduceLROnPlateau(optimizer=optimizer, factor=0.5,
                                       patience=5)
     # Just after instantiating, save the args. Easy loading in the future.
-    exp_dir = conf['main_args']['exp_dir']
     os.makedirs(exp_dir, exist_ok=True)
     conf_path = os.path.join(exp_dir, 'conf.yml')
     with open(conf_path, 'w') as outfile:

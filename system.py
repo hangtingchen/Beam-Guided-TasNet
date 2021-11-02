@@ -17,15 +17,21 @@ class BeamTasNetSystem(System):
 
     def common_step(self, batch, batch_nb, train=False):
         inputs, targets = self.unpack_data(batch)
-        if(self.pretrain):
-            est_sig1, est_bf, est_sig2, sig = self(inputs, targets, do_test=not train)
+        if(train):
+            self.model.mvdr.causal_process_dict['frtres'] = random.randint(1,self.model.mvdr.causal_process_dict['kernel_size']-1)
+            self.model.mvdr.causal_process_dict['endres'] = self.model.mvdr.causal_process_dict['kernel_size'] - self.model.mvdr.causal_process_dict['frtres']
+            self.model.mvdr.causal_process_dict['frtres'] += self.model.mvdr.causal_process_dict['frtres0']
         else:
-            stage = random.choice(['1:2','2:2'])
-            est_sig1, est_bf, est_sig2, sig = self(inputs, targets, do_test=not train, stage=stage)
+            self.model.mvdr.causal_process_dict['endres'] = None
+            self.model.mvdr.causal_process_dict['frtres'] = None
+        if(self.pretrain):
+            est_sig1, est_bf, est_sig2, est_bf2, est_sig3, sig = self(inputs, targets, do_test=not train)
+        else:
+            est_sig1, est_bf, est_sig2, est_bf2, est_sig3, sig = self(inputs, targets, do_test=not train)
         if(self.pretrain):
             loss, loss_dic = self.loss_func(est_sig1, sig)
         else:
-            loss, loss_dic = self.loss_func(est_sig1, est_bf, est_sig2, sig)
+            loss, loss_dic = self.loss_func(est_sig1, est_bf, est_sig2, est_bf2, est_sig3, sig)
         return loss, loss_dic
 
     def training_step(self, batch, batch_nb):
@@ -82,22 +88,24 @@ class BFLoss(nn.Module):
             )
             loss = sig_loss1.mean()
             return loss, loss_dic
-        elif(len(args)==4):
-            est_sig1, est_bf, est_sig2, sig = args
+        elif(len(args)==6):
+            est_sig1, est_bf, est_sig2, est_bf2, est_sig3, sig = args
             # est_sig : B S C N
             B,S,C,N = est_sig1.shape
             est_sig1 = est_sig1.permute(0,2,1,3).reshape(B*C,S,N)
             est_sig2 = est_sig2.permute(0,2,1,3).reshape(B*C,S,N)
+            est_sig3 = est_sig3.permute(0,2,1,3).reshape(B*C,S,N)
             sig = sig.permute(0,2,1,3).reshape(B*C,S,N)
             sig_loss1 = self.sig_loss(est_sig1, sig)
             sig_loss2 = self.sig_loss(est_sig2, sig)
+            sig_loss3 = self.sig_loss(est_sig3, sig)
             n_batch, n_src, _ = sig.shape
             loss_dic = dict(
                 sig_loss1 = sig_loss1.mean(),
                 sig_loss2 = sig_loss2.mean(),
+                sig_loss3 = sig_loss3.mean(),
             )
-            loss = sig_loss1.mean() + sig_loss2.mean()
+            loss = sig_loss1.mean() + sig_loss2.mean()+ sig_loss3.mean()
             return loss, loss_dic
         else:
             raise NotImplementedError()
-

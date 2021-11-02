@@ -68,7 +68,7 @@ class Model(nn.Module):
         self.stft_dict = self.mvdr.stft_dict.copy()
         print("Using stft ", self.stft_dict)
 
-    def forward(self, x, s, do_test=False, stage='1:2'):
+    def forward(self, x, s, do_test=False):
         assert int(stage.split(':')[0])>0
         assert int(stage.split(':')[-1])>0
         n_batch, n_src, n_chan, n_samp = s.shape
@@ -98,22 +98,28 @@ class Model(nn.Module):
         if(stage.split(':')[-1]=='1'):
             assert int(stage.split(":")[0]=='1')
             return est_s, s
-        for it in range(0,int(stage.split(':')[0])):
-            if(it==0):
-                est_bf = self.mvdr(x, self.permute_sig(est_s.detach(), causal=self.causal))[0].detach() # b s c t
-            else:
-                est_bf = self.mvdr(x, self.permute_sig(est_s2.detach(), causal=self.causal))[0].detach() # b s c t
+        est_bf = self.mvdr(x, self.permute_sig(est_s.detach(), causal=self.causal))[0].detach() # b s c t
+        est_bf = est_bf.view(n_batch, n_src*n_chan, n_samp) # b s c t
+        est_bf_x  = self.enc2(torch.cat([x, est_bf],1)) # b s*c f t
+        m_bf = self.masker2(est_bf_x).view(n_batch, n_src, n_chan, *est_bf_x.shape[-2:]) # b s c f t
+        est_s2 = torch_utils.pad_x_to_y(self.dec2((m_bf * est_bf_x.unsqueeze(1).unsqueeze(1)).reshape(n_batch*n_src, n_chan, *est_bf_x.shape[-2:])), s).view(n_batch, n_src, n_chan, -1) # b s c t
+        est_bf = est_bf.view(n_batch, n_src, n_chan, n_samp)
 
-            est_bf = est_bf.view(n_batch, n_src*n_chan, n_samp) # b s c t
-            est_bf_x  = self.enc2(torch.cat([x, est_bf],1)) # b s*c f t
+        est_bf2 = self.mvdr(x, self.permute_sig(est_s2.detach(), causal=self.causal))[0].detach() # b s c t
+        est_bf2 = est_bf2.view(n_batch, n_src*n_chan, n_samp) # b s c t
+        est_bf_x  = self.enc2(torch.cat([x, est_bf2],1)) # b s*c f t
+        m_bf = self.masker2(est_bf_x).view(n_batch, n_src, n_chan, *est_bf_x.shape[-2:]) # b s c f t
+        est_s3 = torch_utils.pad_x_to_y(self.dec2((m_bf * est_bf_x.unsqueeze(1).unsqueeze(1)).reshape(n_batch*n_src, n_chan, *est_bf_x.shape[-2:])), s).view(n_batch, n_src, n_chan, -1) # b s c t
+        est_bf2 = est_bf2.view(n_batch, n_src, n_chan, n_samp)
 
-            m_bf = self.masker2(est_bf_x).view(n_batch, n_src, n_chan, *est_bf_x.shape[-2:]) # b s c f t
-            est_s2 = torch_utils.pad_x_to_y(self.dec2((m_bf * est_bf_x.unsqueeze(1).unsqueeze(1)).reshape(n_batch*n_src, n_chan, *est_bf_x.shape[-2:])), s).view(n_batch, n_src, n_chan, -1) # b s c t
-
-            est_bf = est_bf.view(n_batch, n_src, n_chan, n_samp)
+        '''
+        est_bf3 = self.mvdr(x, self.permute_sig(est_s3.detach(), causal=self.causal))[0].detach() # b s c t
+        est_bf3 = est_bf3.view(n_batch, n_src, n_chan, n_samp) # b s c t
+        return est_s, est_bf, est_s2, est_bf2, est_s3, est_bf3, s
+        '''
 
         # return est_s, est_bf, est_s, s
-        return est_s, est_bf, est_s2, s
+        return est_s, est_bf, est_s2, est_bf2, est_s3, s
 
     def getIdxSet(self, n_src, device, reverse=False):
         a1=[a0 for a0 in range(n_src)]

@@ -38,7 +38,7 @@ epochs=150
 # Evaluation
 eval_use_gpu=1
 job_num=0
-num_job=8
+num_job=1
 test_dir=data/${n_src}speakers/wav8k/max/tt
 
 . utils/parse_options.sh
@@ -95,6 +95,7 @@ fi
 if [[ $stage -le 4 ]]; then
   echo "Stage 4: Training"
   mkdir -p logs
+  [ ! -d $expdir/precheckpoints ] && mv $expdir/checkpoints $expdir/precheckpoints
   CUDA_VISIBLE_DEVICES=$id $python_path train.py \
                 --pretrain False \
                 --train_dir $train_dir \
@@ -102,24 +103,11 @@ if [[ $stage -le 4 ]]; then
                 --task $task \
                 --sample_rate $sample_rate \
                 --lr $lr \
-                --epochs $epochs \
+                --epochs `expr $epochs / 2` \
                 --batch_size $batch_size \
                 --num_workers $num_workers \
                 --exp_dir ${expdir}/ | tee logs/train_${tag}.log
         cp logs/train_${tag}.log $expdir/train2.log
-fi
-
-
-if [[ $stage -le 5 ]]; then
-    echo "Stage 5 : Evaluation"
-    CUDA_VISIBLE_DEVICES=$id $python_path -u eval.py \
-                --task $task \
-                --test_dir $test_dir \
-                --use_gpu $eval_use_gpu \
-                --stage $test_stage \
-                --exp_dir ${expdir} | tee logs/eval_${tag}.log
-    cp logs/eval_${tag}.log $expdir/eval.log
-    exit
 fi
 
 if [[ $stage -le 6 ]]; then
