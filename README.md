@@ -43,7 +43,7 @@ python_path=YOUR_PYTHON_PATH
 
 we recommend running :
 ```bash
-./run.sh --id $id 
+./run.sh --id 0,1,2,3
 ```
 
 ## Test
@@ -53,7 +53,6 @@ You can give a strict check by running :
 ```bash
 ./run.sh --tag $tag --id $id --test_stage $test_stage --stage 6
 ```
-Note that the inference results have differences between the quick test and the strict check under the causal condition due to different paddings.
 
 ## Results
 ([↑up to contents](#contents))
@@ -87,8 +86,8 @@ We recommend you put `asr_decodespwsj2` into SMS-WSJ directory.
 | ✔ | 0 | 8.628  | 35.08 | 10.900 | 22.65 |
 | ✔ | 1 | 13.058 | 19.74 | 12.237 | 19.95 |
 | ✔ | 2 | 13.901 | 18.65 | 12.456 | 19.38 |
-| ✔ | 3 | 13.810 | 18.56 | 12.371 | **19.36** |
-| ✔ | 4 | **13.988** | 18.56 | 12.327 | 19.43 |
+| ✔ | 3 | 13.810 | **18.56** | 12.371 | 19.36 |
+| ✔ | 4 | **13.988** | **18.56** | 12.327 | 19.43 |
 | ✔ | 5 | 13.545 | 18.67 | 12.064 | 19.64 |
 | ✔ | 6 | 13.651 | 18.66 | 12.014 | 19.64 |
 | ✔ | 7 | 13.166 | 18.89 | 11.717 | 20.05 |
