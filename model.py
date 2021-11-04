@@ -68,9 +68,7 @@ class Model(nn.Module):
         self.stft_dict = self.mvdr.stft_dict.copy()
         print("Using stft ", self.stft_dict)
 
-    def forward(self, x, s, do_test=False):
-        assert int(stage.split(':')[0])>0
-        assert int(stage.split(':')[-1])>0
+    def forward(self, x, s, do_test=False, pretrain=False):
         n_batch, n_src, n_chan, n_samp = s.shape
         if(do_test is False):
             # randperm the channels
@@ -95,8 +93,7 @@ class Model(nn.Module):
             s).view(n_batch, n_src, n_chan, -1) # b s c t
 
         # est_s = self.permute_sig(est_s, causal=self.causal)
-        if(stage.split(':')[-1]=='1'):
-            assert int(stage.split(":")[0]=='1')
+        if(pretrain):
             return est_s, s
         est_bf = self.mvdr(x, self.permute_sig(est_s.detach(), causal=self.causal))[0].detach() # b s c t
         est_bf = est_bf.view(n_batch, n_src*n_chan, n_samp) # b s c t

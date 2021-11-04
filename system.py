@@ -25,9 +25,9 @@ class BeamTasNetSystem(System):
             self.model.mvdr.causal_process_dict['endres'] = None
             self.model.mvdr.causal_process_dict['frtres'] = None
         if(self.pretrain):
-            est_sig1, est_bf, est_sig2, est_bf2, est_sig3, sig = self(inputs, targets, do_test=not train)
+            est_sig1, sig = self(inputs, targets, do_test=not train, pretrain=True)
         else:
-            est_sig1, est_bf, est_sig2, est_bf2, est_sig3, sig = self(inputs, targets, do_test=not train)
+            est_sig1, est_bf, est_sig2, est_bf2, est_sig3, sig = self(inputs, targets, do_test=not train, pretrain=False)
         if(self.pretrain):
             loss, loss_dic = self.loss_func(est_sig1, sig)
         else:
