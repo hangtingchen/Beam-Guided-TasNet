@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning import seed_everything
 
-from asteroid.data.spatial_wsj0_mix import make_dataloaders
+from spatial_wsj0_mix import make_dataloaders
 from asteroid.losses import PITLossWrapper, pairwise_neg_snr
 from model import make_model_and_optimizer, load_best_model
 from system import BeamTasNetSystem, BFLoss
