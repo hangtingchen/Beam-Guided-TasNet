@@ -25,8 +25,13 @@ We use dataset `spatialize_wsj0-mix`, which can be created following [[link]](ht
 ## Installation
 ([↑up to contents](#contents))
 
-This recipe requires `asteroid` and `asteroid-filterbanks`. 
-The script `run.sh` will automatically download these requirements in the current directory. Some requirement may not be satisfied. The best way is to run this recipe directly and errors will tell the uninstalled modules.
+Requirement installation:
+```bash
+pip install -r requirements.txt
+```
+
+This recipe requires a modified version of `asteroid-filterbanks`. 
+The script `run.sh` will automatically download these requirements in the current directory.
 
 Paths should be modified according to your environment : 
 The json dataset

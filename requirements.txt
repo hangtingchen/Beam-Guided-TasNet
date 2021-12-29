@@ -1,0 +1,10 @@
+asteroid==0.4.1
+numpy
+pandas
+pytorch_lightning<1.7.0
+PyYAML
+scikit_learn
+SoundFile
+torch
+torch_complex
+tqdm
