@@ -46,10 +46,15 @@ python_path=YOUR_PYTHON_PATH
 ## Train
 ([↑up to contents](#contents))
 
-we recommend running :
+we recommend running to train end-to-end :
 ```bash
 ./run.sh --id 0,1,2,3
 ```
+Also you can train model sequentially :
+```bash
+./run.sh --id 0,1,2,3 --stage 3
+```
+which may provide a sightly better result.
 
 ## Test
 ([↑up to contents](#contents))
