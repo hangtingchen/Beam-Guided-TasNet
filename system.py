@@ -17,13 +17,6 @@ class BeamTasNetSystem(System):
 
     def common_step(self, batch, batch_nb, train=False):
         inputs, targets = self.unpack_data(batch)
-        if(train):
-            self.model.mvdr.causal_process_dict['frtres'] = random.randint(1,self.model.mvdr.causal_process_dict['kernel_size']-1)
-            self.model.mvdr.causal_process_dict['endres'] = self.model.mvdr.causal_process_dict['kernel_size'] - self.model.mvdr.causal_process_dict['frtres']
-            self.model.mvdr.causal_process_dict['frtres'] += self.model.mvdr.causal_process_dict['frtres0']
-        else:
-            self.model.mvdr.causal_process_dict['endres'] = None
-            self.model.mvdr.causal_process_dict['frtres'] = None
         if(self.pretrain):
             est_sig1, sig = self(inputs, targets, do_test=not train, pretrain=True)
         else:
