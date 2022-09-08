@@ -49,7 +49,7 @@ class BeamTasNetSystem(System):
                 'progress_bar': tensorboard_logs}
 
     def validation_epoch_end(self, outputs):
-        return validation_end(outputs)
+        return self.validation_end(outputs)
 
     def test_step(self, batch, batch_nb):
         return self.validation_step(batch, batch_nb)
